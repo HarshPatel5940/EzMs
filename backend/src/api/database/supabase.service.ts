@@ -31,23 +31,30 @@ export class SupabaseService implements OnModuleInit {
     }
 
     async onModuleInit() {
-        const storageClient = createClient(this.supabaseUrl, this.supabaseKey, {
-            db: { schema: "storage" },
-        });
+        const { data: buckets, error } =
+            await this.supabase.storage.listBuckets();
 
-        const { data, error } = await storageClient
-            .from("buckets")
-            .select()
-            .match({ name: this.SupabaseBucket })
-            .single();
-
-        if (error && !data) {
+        if (error) {
             Logger.error(error, "Supabase");
-            throw new Error("Something Went Wrong While Fetching Bucket");
+            throw new Error("Failed to list buckets");
+        }
+
+        const exists = buckets.some((b) => b.name === this.SupabaseBucket);
+
+        if (!exists) {
+            const { error: createError } =
+                await this.supabase.storage.createBucket(this.SupabaseBucket, {
+                    public: true,
+                });
+
+            if (createError) {
+                Logger.error(createError, "Supabase");
+                throw new Error("Failed to create bucket");
+            }
         }
 
         this.isConnected = true;
-        Logger.debug("Supabase Credentials Verified", "SupabaseLoader");
+        Logger.debug("Supabase bucket verified/created", "SupabaseLoader");
     }
 
     async uploadFile(file: Express.Multer.File) {
